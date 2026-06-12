@@ -1,0 +1,19 @@
+{
+  "name": "ecotrack-fullstack",
+  "version": "1.0.0",
+  "description": "Full-stack EcoTrack Carbon Footprint Tracker project",
+  "scripts": {
+    "setup": "npm --prefix backend install",
+    "start": "node backend/server.js",
+    "test": "node --test backend/server.test.js"
+  },
+  "keywords": [
+    "carbon",
+    "footprint",
+    "tracker",
+    "express",
+    "javascript"
+  ],
+  "author": "Antigravity Agent",
+  "license": "MIT"
+}

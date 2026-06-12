@@ -1,0 +1,14 @@
+{
+  "name": "ecotrack-backend",
+  "version": "1.0.0",
+  "description": "Backend API server for EcoTrack Carbon Footprint Tracker",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "ecotrack-fullstack": "file:..",
+    "express": "^4.19.2"
+  }
+}

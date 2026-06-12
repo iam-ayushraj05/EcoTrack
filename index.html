@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Track and reduce your personal carbon footprint with AI-powered insights and personalized action plans." />
+  <title>EcoTrack — Carbon Footprint Tracker</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
+
+  <!-- Google Charts (Google Services) -->
+  <script src="https://www.gstatic.com/charts/loader.js"></script>
+
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+<!-- Skip to main content for accessibility -->
+<a href="#main-content" class="skip-link">Skip to main content</a>
+
+<!-- Toast container -->
+<div id="toast-container" role="status" aria-live="polite" aria-atomic="true"></div>
+
+<!-- ── Onboarding Wizard ────────────────────────────────────────── -->
+<div id="onboarding-overlay" role="dialog" aria-modal="true" aria-labelledby="wizard-title">
+  <div class="wizard-card">
+    <div class="wizard-steps" role="list" aria-label="Setup progress">
+      <div class="wizard-step-dot done" role="listitem" aria-label="Step 1 of 4, complete"></div>
+      <div class="wizard-step-dot" id="ws2" role="listitem"></div>
+      <div class="wizard-step-dot" id="ws3" role="listitem"></div>
+      <div class="wizard-step-dot" id="ws4" role="listitem"></div>
+    </div>
+
+    <!-- Step 1 -->
+    <div id="wiz-step-1">
+      <p style="font-size:2.5rem; margin-bottom:0.75rem;">🌱</p>
+      <h2 class="wizard-heading" id="wizard-title">Welcome to EcoTrack</h2>
+      <p class="wizard-sub">Your personal carbon footprint tracker. In just 2 minutes we'll calculate your current footprint and build a personalized action plan to reduce it.</p>
+      <div class="form-group">
+        <label class="form-label" for="wiz-name">Your name</label>
+        <input type="text" id="wiz-name" class="form-control" placeholder="e.g. Priya Sharma" autocomplete="given-name" />
+      </div>
+      <div class="form-group" style="position: relative;">
+        <label class="form-label" for="wiz-state-search">State / UT</label>
+        <div style="display: flex; gap: 0.5rem; position: relative;">
+          <input type="text" id="wiz-state-search" class="form-control" placeholder="Search and select state..." autocomplete="off" style="flex: 1; padding-right: 40px;" />
+          <button type="button" class="btn-icon" id="wiz-state-search-btn" style="position: absolute; right: 2px; top: 2px; height: 36px; border: none; background: transparent; cursor: pointer; color: var(--gray-500);" aria-label="Search states">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </button>
+        </div>
+        <div id="wiz-state-dropdown" class="state-search-dropdown hidden"></div>
+      </div>
+      <div class="wizard-footer">
+        <button class="btn btn-primary" onclick="wizNext(1)" id="wiz-next-1">Get started →</button>
+      </div>
+    </div>
+
+    <!-- Step 2: Transport -->
+    <div id="wiz-step-2" class="hidden">
+      <p style="font-size:2rem; margin-bottom:0.75rem;">🚗</p>
+      <h2 class="wizard-heading">Your transport habits</h2>
+      <p class="wizard-sub">Help us understand how you get around each week.</p>
+      <div class="form-group">
+        <label class="form-label" for="wiz-drive">Weekly driving distance (km)</label>
+        <div class="range-wrap">
+          <input type="range" id="wiz-drive" class="form-range" min="0" max="500" step="10" value="100"
+            oninput="document.getElementById('wiz-drive-val').textContent=this.value+'km'"
+            aria-describedby="wiz-drive-hint" />
+          <span class="range-val" id="wiz-drive-val">100km</span>
+        </div>
+        <p class="form-hint" id="wiz-drive-hint">Including daily commute</p>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="wiz-flights">Flights per year</label>
+        <div class="range-wrap">
+          <input type="range" id="wiz-flights" class="form-range" min="0" max="20" step="1" value="4"
+            oninput="document.getElementById('wiz-flights-val').textContent=this.value"
+            aria-describedby="wiz-flights-hint" />
+          <span class="range-val" id="wiz-flights-val">4</span>
+        </div>
+        <p class="form-hint" id="wiz-flights-hint">Round trips counted as 2</p>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="wiz-transport">Primary transport mode</label>
+        <select id="wiz-transport" class="form-control">
+          <option value="car">Private car / bike</option>
+          <option value="public">Public transit</option>
+          <option value="walk">Walking / cycling</option>
+          <option value="mixed">Mixed</option>
+        </select>
+      </div>
+      <div class="wizard-footer">
+        <button class="btn btn-secondary" onclick="wizBack(2)">Back</button>
+        <button class="btn btn-primary" onclick="wizNext(2)">Next →</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Home -->
+    <div id="wiz-step-3" class="hidden">
+      <p style="font-size:2rem; margin-bottom:0.75rem;">🏠</p>
+      <h2 class="wizard-heading">Home & energy</h2>
+      <p class="wizard-sub">Your home is usually the biggest slice of your footprint.</p>
+      <div class="form-group">
+        <label class="form-label" for="wiz-elec">Monthly electricity bill (₹)</label>
+        <div class="range-wrap">
+          <input type="range" id="wiz-elec" class="form-range" min="200" max="5000" step="100" value="1200"
+            oninput="document.getElementById('wiz-elec-val').textContent='₹'+this.value" />
+          <span class="range-val" id="wiz-elec-val">₹1200</span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="wiz-diet">Diet type</label>
+        <select id="wiz-diet" class="form-control">
+          <option value="veg">Vegetarian</option>
+          <option value="vegan">Vegan</option>
+          <option value="nonveg">Non-vegetarian</option>
+          <option value="meat-heavy">Heavy meat-eater</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="wiz-household">Household size</label>
+        <select id="wiz-household" class="form-control">
+          <option value="1">Just me</option>
+          <option value="2">2 people</option>
+          <option value="3" selected>3–4 people</option>
+          <option value="5">5+ people</option>
+        </select>
+      </div>
+      <div class="wizard-footer">
+        <button class="btn btn-secondary" onclick="wizBack(3)">Back</button>
+        <button class="btn btn-primary" onclick="wizNext(3)">Calculate footprint →</button>
+      </div>
+    </div>
+
+    <!-- Step 4: Result -->
+    <div id="wiz-step-4" class="hidden">
+      <p style="font-size:2rem; margin-bottom:0.75rem;">📊</p>
+      <h2 class="wizard-heading">Your initial footprint</h2>
+      <p class="wizard-sub">Based on your answers, here is an estimate of your annual carbon footprint.</p>
+      <div style="text-align:center; padding: 1.5rem 0;">
+        <div style="font-family:var(--font-display); font-size:3rem; font-weight:700; color:var(--amber-600); line-height:1;" id="wiz-result-co2">6.4</div>
+        <div style="font-size:1rem; color:var(--gray-500); margin-top:0.25rem;">tonnes CO₂e / year</div>
+        <div style="font-size:0.8rem; color:var(--gray-400); margin-top:0.5rem;">India average: 1.9t · Global average: 4.8t</div>
+        <div id="wiz-result-badge" style="margin-top:0.875rem;"></div>
+      </div>
+      <div id="wiz-breakdown" style="display:grid; grid-template-columns:1fr 1fr; gap:0.625rem; margin-bottom:0.5rem;"></div>
+      <div class="wizard-footer">
+        <button class="btn btn-primary" onclick="finishWizard()" style="width:100%">View my dashboard →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── App Shell ───────────────────────────────────────────────── -->
+<div class="app-shell">
+
+  <!-- Header -->
+  <header class="app-header" role="banner">
+    <a href="#" class="logo" aria-label="EcoTrack home" onclick="window.location.reload(); return false;">
+      <span class="logo-icon" aria-hidden="true">🌿</span>
+      EcoTrack
+    </a>
+    <span class="header-tagline" aria-hidden="true">Carbon Footprint Tracker</span>
+    <nav class="header-actions" aria-label="Header actions">
+      <button class="btn-icon" aria-label="Notifications" onclick="showToast('No new notifications', 'success')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      </button>
+      <button class="btn-icon" aria-label="Settings" onclick="navigate('settings')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+      <div class="user-avatar" role="button" tabindex="0" aria-label="User profile" id="user-avatar-btn" onclick="navigate('settings')" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navigate('settings'); }">PS</div>
+    </nav>
+  </header>
+
+  <!-- Sidebar nav -->
+  <nav class="sidebar" aria-label="Main navigation">
+    <p class="nav-section-label">Overview</p>
+    <button class="nav-item active" onclick="navigate('dashboard')" id="nav-dashboard" aria-current="page">
+      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Dashboard
+      <span class="nav-score-pill" aria-label="Score: 94">94</span>
+    </button>
+    <button class="nav-item" onclick="navigate('tracker')" id="nav-tracker">
+      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Track Activity
+    </button>
+    <button class="nav-item" onclick="navigate('insights')" id="nav-insights">
+      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 20h.01M7 20v-4M12 20V10M17 20V4M22 20v-2"/></svg>
+      AI Insights
+    </button>
+    <div class="nav-divider" role="separator"></div>
+    <p class="nav-section-label">Reduce</p>
+    <button class="nav-item" onclick="navigate('actions')" id="nav-actions">
+      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      Action Plan
+    </button>
+    <button class="nav-item" onclick="navigate('offsets')" id="nav-offsets">
+      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      Offsets & Credits
+    </button>
+    <div class="nav-divider" role="separator"></div>
+    <p class="nav-section-label">Community</p>
+    <button class="nav-item" onclick="navigate('community')" id="nav-community">
+      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Community
+    </button>
+    <button class="nav-item" onclick="navigate('map')" id="nav-map">
+      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+      Emission Map
+    </button>
+    <div class="nav-divider" role="separator"></div>
+    <button class="nav-item" onclick="navigate('settings')" id="nav-settings">
+      <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Settings
+    </button>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content" id="main-content" tabindex="-1">
+
+    <!-- ── DASHBOARD ─────────────────────────────────────────── -->
+    <section id="section-dashboard" class="section active" aria-labelledby="dashboard-heading">
+      <div class="page-heading">
+        <h1 id="dashboard-heading">Good morning, <span id="dash-name">Priya</span> 👋</h1>
+        <p>Here's your carbon footprint overview for <time id="dash-date"></time></p>
+      </div>
+
+      <!-- Score hero -->
+      <div class="score-hero" role="region" aria-label="Carbon score summary">
+        <div class="score-circle-wrap" aria-hidden="true">
+          <svg class="score-circle" viewBox="0 0 120 120">
+            <circle cx="60" cy="60" r="52" fill="none" stroke="#e5e7eb" stroke-width="10"/>
+            <circle cx="60" cy="60" r="52" fill="none" stroke="#16a34a" stroke-width="10"
+              stroke-dasharray="326.7" stroke-dashoffset="131" stroke-linecap="round"
+              transform="rotate(-90 60 60)" id="score-circle-arc"/>
+          </svg>
+          <div class="score-center">
+            <span class="score-number" id="dash-score">60</span>
+            <span class="score-label">eco score</span>
+          </div>
+        </div>
+        <div class="score-info">
+          <h2>EcoScore: Good, keep improving!</h2>
+          <p>You're emitting <strong id="dash-co2">6.4t</strong> CO₂e per year — 34% above the global average. You have active reduction goals.</p>
+          <div class="score-stats" role="list">
+            <div class="score-stat" role="listitem">
+              <div class="score-stat-val good" id="dash-saved">1.2t</div>
+              <div class="score-stat-lbl">saved this year</div>
+            </div>
+            <div class="score-stat" role="listitem">
+              <div class="score-stat-val warn" id="dash-streak">14</div>
+              <div class="score-stat-lbl">day streak 🔥</div>
+            </div>
+            <div class="score-stat" role="listitem">
+              <div class="score-stat-val" id="dash-rank">#3</div>
+              <div class="score-stat-lbl">in your city</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Metric cards -->
+      <div class="cards-grid" role="list">
+        <div class="metric-card" role="listitem">
+          <div class="metric-card-icon green" aria-hidden="true">🚗</div>
+          <div class="metric-card-val" id="card-transport-val">2.1 <span class="metric-card-unit">tCO₂e</span></div>
+          <div class="metric-card-label">Transport emissions</div>
+          <div class="metric-card-delta down" aria-label="8% decrease">↓ 8% vs last month</div>
+        </div>
+        <div class="metric-card" role="listitem">
+          <div class="metric-card-icon amber" aria-hidden="true">⚡</div>
+          <div class="metric-card-val" id="card-energy-val">1.8 <span class="metric-card-unit">tCO₂e</span></div>
+          <div class="metric-card-label">Home energy</div>
+          <div class="metric-card-delta up" aria-label="5% increase">↑ 5% vs last month</div>
+        </div>
+        <div class="metric-card" role="listitem">
+          <div class="metric-card-icon sky" aria-hidden="true">✈️</div>
+          <div class="metric-card-val" id="card-flights-val">1.6 <span class="metric-card-unit">tCO₂e</span></div>
+          <div class="metric-card-label">Flights this year</div>
+          <div class="metric-card-delta down" aria-label="20% decrease">↓ 20% vs last year</div>
+        </div>
+        <div class="metric-card" role="listitem">
+          <div class="metric-card-icon green" aria-hidden="true">🥗</div>
+          <div class="metric-card-val" id="card-food-val">0.9 <span class="metric-card-unit">tCO₂e</span></div>
+          <div class="metric-card-label">Food & diet</div>
+          <div class="metric-card-delta down" aria-label="12% decrease">↓ 12% vs last month</div>
+        </div>
+      </div>
+
+      <!-- AI Insight -->
+      <div class="ai-insight" role="note" aria-label="AI insight">
+        <div class="ai-insight-header">
+          <div class="ai-dot" aria-hidden="true"></div>
+          AI Insight — Personalized for you
+        </div>
+        Your energy bill spiked 5% this month, likely due to summer AC usage. Switching to a 26°C thermostat setting could save ~0.15t CO₂e/month and reduce your bill by ~₹400. <strong>This single action would improve your EcoScore by 4 points.</strong>
+      </div>
+
+      <!-- Charts row -->
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-header">
+            <h2 class="panel-title">
+              <span class="panel-title-icon" style="background:var(--green-100); color:var(--green-700)" aria-hidden="true">📈</span>
+              12-Month Trend
+            </h2>
+            <span class="badge badge-green" aria-label="Trending down">↓ Trending</span>
+          </div>
+          <div class="panel-body">
+            <div id="chart-emission-trend" role="img" aria-label="Bar chart showing monthly CO2 emissions over 12 months"></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <h2 class="panel-title">
+              <span class="panel-title-icon" style="background:var(--green-100); color:var(--green-700)" aria-hidden="true">🥧</span>
+              Emission Sources
+            </h2>
+          </div>
+          <div class="panel-body">
+            <div id="chart-category-pie" role="img" aria-label="Pie chart showing breakdown of emission sources"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Category breakdown -->
+      <div class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title">
+            <span class="panel-title-icon" style="background:var(--green-100); color:var(--green-700)" aria-hidden="true">📊</span>
+            Category Breakdown
+          </h2>
+          <button class="btn btn-secondary btn-sm" onclick="navigate('tracker')">Log activity</button>
+        </div>
+        <div class="panel-body">
+          <div role="list" aria-label="Emission categories">
+            <div class="progress-item" role="listitem">
+              <span class="progress-label" id="cat-transport-label">Transport</span>
+              <div class="progress-bar-wrap" role="progressbar" aria-valuenow="33" aria-valuemin="0" aria-valuemax="100" aria-labelledby="cat-transport-label">
+                <div class="progress-bar amber" style="width:33%"></div>
+              </div>
+              <span class="progress-val">2.1t</span>
+            </div>
+            <div class="progress-item" role="listitem">
+              <span class="progress-label" id="cat-energy-label">Home energy</span>
+              <div class="progress-bar-wrap" role="progressbar" aria-valuenow="28" aria-valuemin="0" aria-valuemax="100" aria-labelledby="cat-energy-label">
+                <div class="progress-bar amber" style="width:28%"></div>
+              </div>
+              <span class="progress-val">1.8t</span>
+            </div>
+            <div class="progress-item" role="listitem">
+              <span class="progress-label" id="cat-flights-label">Flights</span>
+              <div class="progress-bar-wrap" role="progressbar" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100" aria-labelledby="cat-flights-label">
+                <div class="progress-bar red" style="width:25%"></div>
+              </div>
+              <span class="progress-val">1.6t</span>
+            </div>
+            <div class="progress-item" role="listitem">
+              <span class="progress-label" id="cat-food-label">Food & diet</span>
+              <div class="progress-bar-wrap" role="progressbar" aria-valuenow="14" aria-valuemin="0" aria-valuemax="100" aria-labelledby="cat-food-label">
+                <div class="progress-bar green" style="width:14%"></div>
+              </div>
+              <span class="progress-val">0.9t</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── TRACKER ───────────────────────────────────────────── -->
+    <section id="section-tracker" class="section" aria-labelledby="tracker-heading">
+      <div class="page-heading">
+        <h1 id="tracker-heading">Track Activity</h1>
+        <p>Log your daily activities to get accurate emissions data</p>
+      </div>
+
+      <div class="tabs" role="tablist" aria-label="Activity categories">
+        <button class="tab-btn active" role="tab" aria-selected="true" aria-controls="tab-transport" id="tab-btn-transport" onclick="switchTab('transport')">🚗 Transport</button>
+        <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-energy" id="tab-btn-energy" onclick="switchTab('energy')">⚡ Energy</button>
+        <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-food" id="tab-btn-food" onclick="switchTab('food')">🥗 Food</button>
+        <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-shopping" id="tab-btn-shopping" onclick="switchTab('shopping')">🛍️ Shopping</button>
+        <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-history" id="tab-btn-history" onclick="switchTab('history')">📋 History</button>
+      </div>
+
+      <!-- Transport tab -->
+      <div id="tab-transport" class="tab-panel active" role="tabpanel" aria-labelledby="tab-btn-transport">
+        <div class="two-col">
+          <div class="panel">
+            <div class="panel-header"><h2 class="panel-title">Log a trip</h2></div>
+            <div class="panel-body">
+              <div class="form-group">
+                <label class="form-label" for="trip-date">Date</label>
+                <input type="date" id="trip-date" class="form-control" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="trip-mode">Transport mode</label>
+                <select id="trip-mode" class="form-control" onchange="updateTripFactor()">
+                  <option value="0.21">Petrol car (solo)</option>
+                  <option value="0.17">Diesel car (solo)</option>
+                  <option value="0.06">Electric vehicle</option>
+                  <option value="0.089">Motorbike</option>
+                  <option value="0.03">Bus (public)</option>
+                  <option value="0.041">Metro / train</option>
+                  <option value="0">Walk / cycle</option>
+                  <option value="0.255">Domestic flight</option>
+                  <option value="0.195">International flight</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="trip-dist">Distance (km)</label>
+                <div class="range-wrap">
+                  <input type="range" id="trip-dist" class="form-range" min="1" max="200" step="1" value="25"
+                    oninput="document.getElementById('trip-dist-val').textContent=this.value+'km'; calcTrip()" />
+                  <span class="range-val" id="trip-dist-val">25km</span>
+                </div>
+              </div>
+              <div class="ai-insight" style="margin-bottom:1rem;">
+                <div class="ai-insight-header"><div class="ai-dot" aria-hidden="true"></div>Emission estimate</div>
+                This trip will emit <strong id="trip-co2-est">5.25 kg</strong> CO₂e.
+                <span id="trip-alt-msg" style="color:var(--green-800)"> Taking the metro instead would save 4.72 kg CO₂e.</span>
+              </div>
+              <button class="btn btn-primary" onclick="logTrip()" style="width:100%">Log this trip</button>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><h2 class="panel-title">This week's transport</h2></div>
+            <div class="panel-body">
+              <div id="chart-comparison-bar" role="img" aria-label="Bar chart comparing weekly transport emissions"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Energy tab -->
+      <div id="tab-energy" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-energy">
+        <div class="panel">
+          <div class="panel-header"><h2 class="panel-title">Monthly energy usage</h2></div>
+          <div class="panel-body">
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem;">
+              <div class="form-group">
+                <label class="form-label" for="en-elec">Electricity (kWh)</label>
+                <input type="number" id="en-elec" class="form-control" value="250" min="0" max="2000"
+                  oninput="calcEnergy()" aria-describedby="en-elec-hint" />
+                <p class="form-hint" id="en-elec-hint">From your bill or meter</p>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="en-gas">LPG cylinders / mo</label>
+                <input type="number" id="en-gas" class="form-control" value="1" min="0" max="10"
+                  oninput="calcEnergy()" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="en-ac">AC usage (hrs/day)</label>
+                <input type="number" id="en-ac" class="form-control" value="4" min="0" max="24"
+                  oninput="calcEnergy()" />
+              </div>
+            </div>
+            <div class="ai-insight">
+              <div class="ai-insight-header"><div class="ai-dot" aria-hidden="true"></div>Energy footprint this month</div>
+              Total: <strong id="energy-total-co2">0.15 tCO₂e</strong>.
+              <span id="energy-tip">Tip: Enable eco mode on your AC to cut usage by 20%.</span>
+            </div>
+            <button class="btn btn-primary" onclick="saveEnergy()">Save energy log</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Food tab -->
+      <div id="tab-food" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-food">
+        <div class="panel">
+          <div class="panel-header"><h2 class="panel-title">Today's meals</h2></div>
+          <div class="panel-body">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+              <div class="form-group">
+                <label class="form-label" for="food-breakfast">Breakfast</label>
+                <select id="food-breakfast" class="form-control">
+                  <option value="0.4">Eggs & toast</option>
+                  <option value="0.2" selected>Vegetable upma</option>
+                  <option value="0.15">Fruit & yogurt</option>
+                  <option value="0.8">Full non-veg breakfast</option>
+                  <option value="0.1">Oatmeal (plant-based)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="food-lunch">Lunch</label>
+                <select id="food-lunch" class="form-control">
+                  <option value="0.5" selected>Dal & rice (veg)</option>
+                  <option value="1.2">Chicken curry</option>
+                  <option value="2.1">Mutton biryani</option>
+                  <option value="0.3">Salad bowl</option>
+                  <option value="0.4">Paneer curry</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="food-dinner">Dinner</label>
+                <select id="food-dinner" class="form-control">
+                  <option value="0.5">Dal & roti (veg)</option>
+                  <option value="1.2" selected>Fish curry</option>
+                  <option value="0.3">Vegetable stir-fry</option>
+                  <option value="2.5">Beef/pork dish</option>
+                  <option value="0.8">Egg fried rice</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="food-waste">Food waste level</label>
+                <select id="food-waste" class="form-control">
+                  <option value="1.0" selected>None — ate everything</option>
+                  <option value="1.1">Small scraps</option>
+                  <option value="1.25">Moderate waste</option>
+                  <option value="1.5">Significant waste</option>
+                </select>
+              </div>
+            </div>
+            <div class="ai-insight">
+              <div class="ai-insight-header"><div class="ai-dot" aria-hidden="true"></div>Today's food footprint</div>
+              Estimated: <strong id="food-total-co2">1.9 kg CO₂e</strong>.
+              Switching your dinner to a vegetarian option would save 0.9 kg CO₂e today.
+            </div>
+            <button class="btn btn-primary" onclick="logFood()">Log meals</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Shopping tab -->
+      <div id="tab-shopping" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-shopping">
+        <div class="panel">
+          <div class="panel-header"><h2 class="panel-title">Shopping & purchases</h2></div>
+          <div class="panel-body">
+            <div class="form-group">
+              <label class="form-label" for="shop-category">Item category</label>
+              <select id="shop-category" class="form-control">
+                <option value="0.06">Clothing (fast fashion)</option>
+                <option value="0.02">Clothing (second-hand)</option>
+                <option value="0.3">Electronics — smartphone</option>
+                <option value="1.2">Electronics — laptop</option>
+                <option value="5">Electronics — TV</option>
+                <option value="0.5">Furniture (flat-pack)</option>
+                <option value="0.1">Books / paper goods</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="shop-qty">Quantity</label>
+              <input type="number" id="shop-qty" class="form-control" value="1" min="1" max="100" />
+            </div>
+            <button class="btn btn-primary" onclick="logShopping()">Log purchase</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- History tab -->
+      <div id="tab-history" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-history">
+        <div class="panel">
+          <div class="panel-header">
+            <h2 class="panel-title">Activity log</h2>
+            <button class="btn btn-secondary btn-sm" onclick="exportCSV()">Export CSV</button>
+          </div>
+          <div class="panel-body" style="padding:0;">
+            <table class="data-table" aria-label="Activity history log">
+              <thead>
+                <tr>
+                  <th scope="col">Date</th>
+                  <th scope="col">Activity</th>
+                  <th scope="col">Category</th>
+                  <th scope="col">CO₂e</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody id="history-table-body">
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── AI INSIGHTS ────────────────────────────────────────── -->
+    <section id="section-insights" class="section" aria-labelledby="insights-heading">
+      <div class="page-heading">
+        <h1 id="insights-heading">AI Insights</h1>
+        <p>Personalized recommendations powered by your footprint data</p>
+      </div>
+
+      <div class="tip-card" role="note">
+        <span class="tip-badge">Top pick</span>
+        <div class="tip-body">
+          <h3>Switch to electric vehicle — biggest single impact</h3>
+          <p>Your transport emissions are your largest source. An EV would cut 1.4t CO₂e/year and reduce your annual fuel cost by ~₹42,000.</p>
+        </div>
+      </div>
+      <div class="tip-card" role="note">
+        <span class="tip-badge" style="background:var(--teal-600);">Quick win</span>
+        <div class="tip-body">
+          <h3>Set AC thermostat to 26°C instead of 22°C</h3>
+          <p>Every degree matters: 26°C uses ~24% less electricity. Over summer that's ~0.18t CO₂e saved and ~₹1,800 off your bill.</p>
+        </div>
+      </div>
+      <div class="tip-card" role="note">
+        <span class="tip-badge" style="background:var(--amber-600);">Diet</span>
+        <div class="tip-body">
+          <h3>Replace 2 non-veg meals per week with plant-based</h3>
+          <p>Animal products account for 14.5% of global emissions. Two meat-free dinners per week saves ~0.31t CO₂e/year.</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title">Footprint vs India & World</h2>
+        </div>
+        <div class="panel-body">
+          <div role="list" aria-label="Comparison with averages">
+            <div class="progress-item" role="listitem">
+              <span class="progress-label" id="cmp-you-label">You</span>
+              <div class="progress-bar-wrap" role="progressbar" aria-valuenow="64" aria-valuemin="0" aria-valuemax="100" aria-labelledby="cmp-you-label">
+                <div class="progress-bar amber" style="width:64%"></div>
+              </div>
+              <span class="progress-val">6.4t</span>
+            </div>
+            <div class="progress-item" role="listitem">
+              <span class="progress-label" id="cmp-world-label">World avg</span>
+              <div class="progress-bar-wrap" role="progressbar" aria-valuenow="48" aria-valuemin="0" aria-valuemax="100" aria-labelledby="cmp-world-label">
+                <div class="progress-bar sky" style="width:48%"></div>
+              </div>
+              <span class="progress-val">4.8t</span>
+            </div>
+            <div class="progress-item" role="listitem">
+              <span class="progress-label" id="cmp-india-label">India avg</span>
+              <div class="progress-bar-wrap" role="progressbar" aria-valuenow="19" aria-valuemin="0" aria-valuemax="100" aria-labelledby="cmp-india-label">
+                <div class="progress-bar green" style="width:19%"></div>
+              </div>
+              <span class="progress-val">1.9t</span>
+            </div>
+            <div class="progress-item" role="listitem">
+              <span class="progress-label" id="cmp-target-label">1.5°C target</span>
+              <div class="progress-bar-wrap" role="progressbar" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100" aria-labelledby="cmp-target-label">
+                <div class="progress-bar green" style="width:25%"></div>
+              </div>
+              <span class="progress-val">2.5t</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><h2 class="panel-title">Reduction Roadmap</h2></div>
+        <div class="panel-body">
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px,1fr)); gap:1rem;" role="list">
+            <div style="text-align:center; padding:1rem; background:var(--green-50); border-radius:var(--radius-lg); border:1px solid var(--green-200);" role="listitem">
+              <div style="font-size:1.5rem; margin-bottom:0.5rem;" aria-hidden="true">🎯</div>
+              <div style="font-size:0.75rem; color:var(--gray-500); margin-bottom:0.25rem;">End of 2025</div>
+              <div style="font-family:var(--font-display); font-size:1.25rem; font-weight:700; color:var(--green-700);">5.0t</div>
+              <div style="font-size:0.75rem; color:var(--gray-500);">EV + diet changes</div>
+            </div>
+            <div style="text-align:center; padding:1rem; background:var(--green-50); border-radius:var(--radius-lg); border:1px solid var(--green-200);" role="listitem">
+              <div style="font-size:1.5rem; margin-bottom:0.5rem;" aria-hidden="true">🌱</div>
+              <div style="font-size:0.75rem; color:var(--gray-500); margin-bottom:0.25rem;">End of 2026</div>
+              <div style="font-family:var(--font-display); font-size:1.25rem; font-weight:700; color:var(--green-700);">3.5t</div>
+              <div style="font-size:0.75rem; color:var(--gray-500);">Solar + offsets</div>
+            </div>
+            <div style="text-align:center; padding:1rem; background:var(--green-50); border-radius:var(--radius-lg); border:1px solid var(--green-200);" role="listitem">
+              <div style="font-size:1.5rem; margin-bottom:0.5rem;" aria-hidden="true">🏆</div>
+              <div style="font-size:0.75rem; color:var(--gray-500); margin-bottom:0.25rem;">End of 2027</div>
+              <div style="font-family:var(--font-display); font-size:1.25rem; font-weight:700; color:var(--green-600);">2.5t</div>
+              <div style="font-size:0.75rem; color:var(--gray-500);">Paris-aligned 🎉</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── ACTION PLAN ────────────────────────────────────────── -->
+    <section id="section-actions" class="section" aria-labelledby="actions-heading">
+      <div class="page-heading">
+        <h1 id="actions-heading">Action Plan</h1>
+        <p>Tick off actions to reduce your footprint and earn EcoPoints</p>
+      </div>
+      <div class="ai-insight" role="note">
+        <div class="ai-insight-header"><div class="ai-dot" aria-hidden="true"></div>Your progress</div>
+        You have completed <strong id="actions-done-count">0</strong> of <strong>12</strong> recommended actions. Complete all to save up to <strong>2.8t CO₂e/year</strong>.
+      </div>
+      <div class="actions-grid" id="actions-grid" role="list" aria-label="Recommended actions"></div>
+    </section>
+
+    <!-- ── OFFSETS ─────────────────────────────────────────────── -->
+    <section id="section-offsets" class="section" aria-labelledby="offsets-heading">
+      <div class="page-heading">
+        <h1 id="offsets-heading">Offsets & Carbon Credits</h1>
+        <p>Compensate for unavoidable emissions through verified carbon offset projects</p>
+      </div>
+      <div class="cards-grid" role="list">
+        <div class="metric-card" role="listitem">
+          <div class="metric-card-icon green" aria-hidden="true">🌳</div>
+          <div class="metric-card-val">47 <span class="metric-card-unit">trees</span></div>
+          <div class="metric-card-label">Equivalent planted</div>
+        </div>
+        <div class="metric-card" role="listitem">
+          <div class="metric-card-icon sky" aria-hidden="true">💳</div>
+          <div class="metric-card-val">1.2 <span class="metric-card-unit">tCO₂e</span></div>
+          <div class="metric-card-label">Offset purchased</div>
+        </div>
+        <div class="metric-card" role="listitem">
+          <div class="metric-card-icon amber" aria-hidden="true">💰</div>
+          <div class="metric-card-val">₹2,400</div>
+          <div class="metric-card-label">Spent on offsets</div>
+        </div>
+        <div class="metric-card" role="listitem">
+          <div class="metric-card-icon green" aria-hidden="true">✅</div>
+          <div class="metric-card-val">Gold <span class="metric-card-unit">standard</span></div>
+          <div class="metric-card-label">Certification level</div>
+        </div>
+      </div>
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-header"><h2 class="panel-title">🌿 Verified projects</h2></div>
+          <div class="panel-body">
+            <div style="border-bottom:1px solid var(--gray-100); padding-bottom:1rem; margin-bottom:1rem;">
+              <div style="font-weight:600; font-size:0.875rem; margin-bottom:4px;">Sundarbans Mangrove Restoration</div>
+              <div style="font-size:0.78rem; color:var(--gray-500); margin-bottom:0.625rem;">West Bengal · Gold Standard · Verified</div>
+              <div style="display:flex; align-items:center; gap:0.5rem;">
+                <span class="badge badge-green">₹1,800/t CO₂e</span>
+                <button class="btn btn-primary btn-sm" onclick="showToast('Offset purchased! 0.5t CO₂e credited.', 'success')">Buy offset</button>
+              </div>
+            </div>
+            <div style="border-bottom:1px solid var(--gray-100); padding-bottom:1rem; margin-bottom:1rem;">
+              <div style="font-weight:600; font-size:0.875rem; margin-bottom:4px;">Rajasthan Solar Farm</div>
+              <div style="font-size:0.78rem; color:var(--gray-500); margin-bottom:0.625rem;">Rajasthan · VCS · Renewable Energy</div>
+              <div style="display:flex; align-items:center; gap:0.5rem;">
+                <span class="badge badge-sky">₹1,200/t CO₂e</span>
+                <button class="btn btn-primary btn-sm" onclick="showToast('Offset purchased! 0.5t CO₂e credited.', 'success')">Buy offset</button>
+              </div>
+            </div>
+            <div>
+              <div style="font-weight:600; font-size:0.875rem; margin-bottom:4px;">Eastern Himalayan Reforestation</div>
+              <div style="font-size:0.78rem; color:var(--gray-500); margin-bottom:0.625rem;">Assam · Gold Standard · Biodiversity</div>
+              <div style="display:flex; align-items:center; gap:0.5rem;">
+                <span class="badge badge-amber">₹2,200/t CO₂e</span>
+                <button class="btn btn-primary btn-sm" onclick="showToast('Offset purchased! 0.5t CO₂e credited.', 'success')">Buy offset</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><h2 class="panel-title">🎖️ Offset calculator</h2></div>
+          <div class="panel-body">
+            <p style="font-size:0.85rem; color:var(--gray-600); margin-bottom:1.25rem;">Your remaining un-offset emissions: <strong>5.2t CO₂e</strong></p>
+            <div class="form-group">
+              <label class="form-label" for="offset-amount">Amount to offset (tonnes)</label>
+              <div class="range-wrap">
+                <input type="range" id="offset-amount" class="form-range" min="0.5" max="6" step="0.5" value="1"
+                  oninput="document.getElementById('offset-val').textContent=this.value+'t'; document.getElementById('offset-cost').textContent='₹'+(this.value*1800).toLocaleString()" />
+                <span class="range-val" id="offset-val">1t</span>
+              </div>
+            </div>
+            <div style="background:var(--green-50); border-radius:var(--radius-md); padding:1rem; text-align:center; margin-bottom:1.25rem;">
+              <div style="font-size:0.75rem; color:var(--gray-500); margin-bottom:4px;">Estimated cost</div>
+              <div style="font-family:var(--font-display); font-size:1.5rem; font-weight:700; color:var(--green-700);" id="offset-cost">₹1,800</div>
+            </div>
+            <button class="btn btn-primary" style="width:100%" onclick="showToast('Redirecting to payment gateway…', 'success')">Purchase offsets</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── COMMUNITY ──────────────────────────────────────────── -->
+    <section id="section-community" class="section" aria-labelledby="community-heading">
+      <div class="page-heading">
+        <h1 id="community-heading">Community</h1>
+        <p>See how you compare with friends and others in your city</p>
+      </div>
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-header">
+            <h2 class="panel-title">🏆 City leaderboard</h2>
+            <span class="badge badge-green">Delhi NCR</span>
+          </div>
+          <div class="panel-body" id="leaderboard-list" role="list" aria-label="City leaderboard"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><h2 class="panel-title">🎖️ Your achievements</h2></div>
+          <div class="panel-body">
+            <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:0.875rem;" role="list">
+              <div style="text-align:center; padding:1rem; background:var(--green-50); border-radius:var(--radius-md);" role="listitem">
+                <div style="font-size:2rem;" aria-hidden="true">🌱</div>
+                <div style="font-size:0.72rem; font-weight:600; color:var(--green-800); margin-top:4px;">First Log</div>
+              </div>
+              <div style="text-align:center; padding:1rem; background:var(--green-50); border-radius:var(--radius-md);" role="listitem">
+                <div style="font-size:2rem;" aria-hidden="true">🔥</div>
+                <div style="font-size:0.72rem; font-weight:600; color:var(--green-800); margin-top:4px;">14-day streak</div>
+              </div>
+              <div style="text-align:center; padding:1rem; background:var(--green-50); border-radius:var(--radius-md);" role="listitem">
+                <div style="font-size:2rem;" aria-hidden="true">🚲</div>
+                <div style="font-size:0.72rem; font-weight:600; color:var(--green-800); margin-top:4px;">Pedal Power</div>
+              </div>
+              <div style="text-align:center; padding:1rem; background:var(--green-50); border-radius:var(--radius-md);" role="listitem">
+                <div style="font-size:2rem;" aria-hidden="true">🥗</div>
+                <div style="font-size:0.72rem; font-weight:600; color:var(--green-800); margin-top:4px;">Green Eater</div>
+              </div>
+              <div style="text-align:center; padding:1rem; background:var(--gray-100); border-radius:var(--radius-md); opacity:0.5;" role="listitem" aria-label="Locked achievement">
+                <div style="font-size:2rem;" aria-hidden="true">🔒</div>
+                <div style="font-size:0.72rem; font-weight:600; color:var(--gray-500); margin-top:4px;">EV Driver</div>
+              </div>
+              <div style="text-align:center; padding:1rem; background:var(--gray-100); border-radius:var(--radius-md); opacity:0.5;" role="listitem" aria-label="Locked achievement">
+                <div style="font-size:2rem;" aria-hidden="true">🔒</div>
+                <div style="font-size:0.72rem; font-weight:600; color:var(--gray-500); margin-top:4px;">Net Zero</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── MAP ────────────────────────────────────────────────── -->
+    <section id="section-map" class="section" aria-labelledby="map-heading">
+      <div class="page-heading">
+        <h1 id="map-heading">Emission Map</h1>
+        <p>See per-capita carbon emissions across major Indian cities (Google Maps)</p>
+      </div>
+      <div class="panel">
+        <div class="panel-body">
+          <div id="emission-map" role="img" aria-label="Map showing carbon emission circles across Indian cities">
+            <div style="text-align:center;">
+              <div style="font-size:2rem; margin-bottom:0.5rem;">🗺️</div>
+              <p style="font-size:0.875rem; color:var(--gray-500);">Loading Google Maps…</p>
+              <p style="font-size:0.75rem; color:var(--gray-400); margin-top:4px;">Add your Google Maps API key to enable this feature</p>
+            </div>
+          </div>
+          <div style="display:flex; gap:1.5rem; margin-top:1.25rem; flex-wrap:wrap;" role="list" aria-label="City emission data">
+            <div class="metric-card" role="listitem" style="flex:1; min-width:140px;">
+              <div style="font-size:0.72rem; color:var(--gray-500);">Delhi</div>
+              <div style="font-weight:700; color:var(--red-600);">9.2t</div>
+            </div>
+            <div class="metric-card" role="listitem" style="flex:1; min-width:140px;">
+              <div style="font-size:0.72rem; color:var(--gray-500);">Mumbai</div>
+              <div style="font-weight:700; color:var(--amber-600);">7.8t</div>
+            </div>
+            <div class="metric-card" role="listitem" style="flex:1; min-width:140px;">
+              <div style="font-size:0.72rem; color:var(--gray-500);">Kolkata</div>
+              <div style="font-weight:700; color:var(--amber-600);">8.4t</div>
+            </div>
+            <div class="metric-card" role="listitem" style="flex:1; min-width:140px;">
+              <div style="font-size:0.72rem; color:var(--gray-500);">Chennai</div>
+              <div style="font-weight:700; color:var(--green-600);">6.1t</div>
+            </div>
+            <div class="metric-card" role="listitem" style="flex:1; min-width:140px;">
+              <div style="font-size:0.72rem; color:var(--gray-500);">Bengaluru</div>
+              <div style="font-weight:700; color:var(--green-600);">5.9t</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SETTINGS ───────────────────────────────────────────── -->
+    <section id="section-settings" class="section" aria-labelledby="settings-heading">
+      <div class="page-heading">
+        <h1 id="settings-heading">Settings</h1>
+        <p>Manage your profile, units and notifications</p>
+      </div>
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-header"><h2 class="panel-title">Profile</h2></div>
+          <div class="panel-body">
+            <div class="form-group">
+              <label class="form-label" for="set-name">Display name</label>
+              <input type="text" id="set-name" class="form-control" value="Priya Sharma" autocomplete="name" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="set-email">Email</label>
+              <input type="email" id="set-email" class="form-control" value="priya@example.com" autocomplete="email" />
+            </div>
+            <div class="form-group" style="position: relative;">
+              <label class="form-label" for="set-state-search">State / UT</label>
+              <div style="display: flex; gap: 0.5rem; position: relative;">
+                <input type="text" id="set-state-search" class="form-control" placeholder="Search and select state..." autocomplete="off" style="flex: 1; padding-right: 40px;" />
+                <button type="button" class="btn-icon" id="set-state-search-btn" style="position: absolute; right: 2px; top: 2px; height: 36px; border: none; background: transparent; cursor: pointer; color: var(--gray-500);" aria-label="Search states">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                </button>
+              </div>
+              <div id="set-state-dropdown" class="state-search-dropdown hidden"></div>
+            </div>
+            <button class="btn btn-primary" onclick="saveSettings()">Save changes</button>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><h2 class="panel-title">Preferences</h2></div>
+          <div class="panel-body">
+            <div style="display:flex; flex-direction:column; gap:1rem;">
+              <label style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;" for="pref-notif">
+                <span style="font-size:0.875rem; color:var(--gray-700);">Daily reminders</span>
+                <input type="checkbox" id="pref-notif" checked style="accent-color:var(--green-600); width:18px; height:18px;" aria-label="Enable daily reminders" />
+              </label>
+              <label style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;" for="pref-weekly">
+                <span style="font-size:0.875rem; color:var(--gray-700);">Weekly summary email</span>
+                <input type="checkbox" id="pref-weekly" checked style="accent-color:var(--green-600); width:18px; height:18px;" aria-label="Enable weekly summary" />
+              </label>
+              <label style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;" for="pref-tips">
+                <span style="font-size:0.875rem; color:var(--gray-700);">AI tips notifications</span>
+                <input type="checkbox" id="pref-tips" checked style="accent-color:var(--green-600); width:18px; height:18px;" aria-label="Enable AI tips" />
+              </label>
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label" for="pref-units">Preferred units</label>
+                <select id="pref-units" class="form-control">
+                  <option>Metric (kg, km)</option>
+                  <option>Imperial (lbs, miles)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><h2 class="panel-title">Data & Privacy</h2></div>
+        <div class="panel-body" style="display:flex; gap:1rem; flex-wrap:wrap;">
+          <button class="btn btn-secondary" onclick="exportCSV()">📥 Export my data (CSV)</button>
+          <button class="btn btn-secondary" onclick="showToast('Data report sent to your email.', 'success')">📧 Request data report</button>
+          <button class="btn btn-secondary" style="color:var(--red-600); border-color:var(--red-600);" onclick="confirmDelete()">🗑️ Delete account</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Custom Scripts -->
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+
+<!-- Google Maps Script -->
+<!-- <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&callback=initMap"></script> -->
+
+</body>
+</html>
