@@ -1,8 +1,8 @@
 {
   "user": {
-    "name": "John Doe",
-    "email": "priya@example.com",
-    "city": "chennai",
+    "name": "Test User",
+    "email": "test@example.com",
+    "city": "delhi",
     "streak": 14,
     "ecoScore": 60,
     "preferences": {
@@ -13,73 +13,20 @@
     }
   },
   "footprint": {
-    "transport": 4.38,
-    "flights": 3.21,
-    "energy": 49.96,
-    "food": 3.6
+    "transport": 2.1,
+    "energy": 1.8,
+    "flights": 1.6,
+    "food": 0.9
   },
   "activities": [
     {
-      "id": "act-1781285576800",
-      "date": "12/6/2026",
-      "name": "Petrol car (solo) - 25km",
-      "category": "Transport",
-      "co2": "5.25 kg CO₂e",
-      "status": "Logged"
-    },
-    {
-      "id": "act-1781285370611",
-      "date": "12/6/2026",
-      "name": "Petrol car trip (25km)",
+      "id": "act-1781291283110",
+      "date": "13/6/2026",
+      "name": "&lt;script&gt;alert(1)&lt;&#x2F;script&gt;",
       "category": "transport",
-      "co2": 5.25,
-      "status": "Logged"
-    },
-    {
-      "id": "act-1781284756925",
-      "date": "12/6/2026",
-      "name": "Petrol car trip (25km)",
-      "category": "transport",
-      "co2": 5.25,
-      "status": "Logged"
-    },
-    {
-      "id": "act-1781284715438",
-      "date": "12/6/2026",
-      "name": "Petrol car trip (25km)",
-      "category": "transport",
-      "co2": 5.25,
-      "status": "Logged"
-    },
-    {
-      "id": "seed-1",
-      "date": "10/06/2026",
-      "name": "Metro Transit commute - 18km",
-      "category": "Transport",
-      "co2": "0.74 kg CO₂e",
-      "status": "Logged"
-    },
-    {
-      "id": "seed-2",
-      "date": "09/06/2026",
-      "name": "Dal & Rice Vegetarian lunch",
-      "category": "Food",
-      "co2": "0.50 kg CO₂e",
-      "status": "Logged"
-    },
-    {
-      "id": "seed-3",
-      "date": "08/06/2026",
-      "name": "LED lighting setup update",
-      "category": "Home energy",
-      "co2": "0.12 tCO₂e",
+      "co2": 1,
       "status": "Logged"
     }
   ],
-  "actionsCompleted": [
-    "transit",
-    "led",
-    "actemp",
-    "transit-week"
-  ]
+  "actionsCompleted": []
 }

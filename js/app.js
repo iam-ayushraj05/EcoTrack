@@ -216,7 +216,9 @@ window.showToast = function(msg, type = '') {
   const toast = document.createElement('div');
   toast.className = 'toast ' + type;
   toast.textContent = msg;
-  toast.setAttribute('role', 'alert');
+  // 'status' for success (polite), 'alert' for errors (assertive)
+  toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+  toast.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
   container.appendChild(toast);
   setTimeout(() => toast.remove(), 3500);
 };
@@ -338,23 +340,27 @@ function updateDashboardUI() {
   document.querySelector('.progress-item:nth-child(3) .progress-val').textContent = flightsVal;
   document.querySelector('.progress-item:nth-child(4) .progress-val').textContent = foodVal;
 
-  // Update metric cards values
-  const tCard = document.getElementById('card-transport-val');
-  const eCard = document.getElementById('card-energy-val');
-  const flCard = document.getElementById('card-flights-val');
-  const foCard = document.getElementById('card-food-val');
-  const updateMetricCard = (card, val) => {
-    if (!card) return;
-    card.textContent = val.toFixed(1) + ' ';
-    const unit = document.createElement('span');
-    unit.className = 'metric-card-unit';
-    unit.textContent = 'tCO₂e';
-    card.appendChild(unit);
+  // Update metric cards — use a helper that avoids repeated child node creation
+  const setMetricCard = (id, val) => {
+    const valEl = document.getElementById(id);
+    if (!valEl) return;
+    // Only update text nodes; the unit <span> is already in HTML
+    const firstChild = valEl.firstChild;
+    if (firstChild && firstChild.nodeType === Node.TEXT_NODE) {
+      firstChild.nodeValue = val.toFixed(1) + '\u00a0';
+    } else {
+      // Fallback: clear and rebuild once
+      valEl.textContent = val.toFixed(1) + ' ';
+      const unit = document.createElement('span');
+      unit.className = 'metric-card-unit';
+      unit.textContent = 'tCO\u2082e';
+      valEl.appendChild(unit);
+    }
   };
-  updateMetricCard(tCard, state.footprint.transport);
-  updateMetricCard(eCard, state.footprint.energy);
-  updateMetricCard(flCard, state.footprint.flights);
-  updateMetricCard(foCard, state.footprint.food);
+  setMetricCard('card-transport-val', state.footprint.transport);
+  setMetricCard('card-energy-val', state.footprint.energy);
+  setMetricCard('card-flights-val', state.footprint.flights);
+  setMetricCard('card-food-val', state.footprint.food);
 
   // Update Progress Bars (Aria values and width)
   const max = Math.max(3.0, total);
@@ -702,7 +708,10 @@ function renderHistory() {
     
     const tdCo2 = document.createElement('td');
     tdCo2.style.fontWeight = '600';
-    tdCo2.textContent = a.co2;
+    // co2 may be a number (from server) or a display string (legacy local storage)
+    tdCo2.textContent = typeof a.co2 === 'number'
+      ? a.co2.toFixed(3) + ' kg CO\u2082e'
+      : String(a.co2);
     
     const tdStatus = document.createElement('td');
     const spanStatus = document.createElement('span');
