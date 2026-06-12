@@ -3,6 +3,8 @@
  * Abstracts backend HTTP requests with a fallback to localStorage if the backend is offline.
  */
 
+'use strict';
+
 const API_BASE_URL = 'http://localhost:3000/api';
 
 const api = {

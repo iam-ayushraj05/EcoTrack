@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
 
   <!-- Google Charts (Google Services) -->
-  <script src="https://www.gstatic.com/charts/loader.js"></script>
+  <script src="https://www.gstatic.com/charts/loader.js" defer></script>
 
   <!-- Custom Stylesheet -->
   <link rel="stylesheet" href="css/styles.css" />
@@ -28,17 +28,18 @@
 <!-- ── Onboarding Wizard ────────────────────────────────────────── -->
 <div id="onboarding-overlay" role="dialog" aria-modal="true" aria-labelledby="wizard-title">
   <div class="wizard-card">
+    <h2 id="wizard-title" class="sr-only">EcoTrack Onboarding Questionnaire</h2>
     <div class="wizard-steps" role="list" aria-label="Setup progress">
-      <div class="wizard-step-dot done" role="listitem" aria-label="Step 1 of 4, complete"></div>
-      <div class="wizard-step-dot" id="ws2" role="listitem"></div>
-      <div class="wizard-step-dot" id="ws3" role="listitem"></div>
-      <div class="wizard-step-dot" id="ws4" role="listitem"></div>
+      <div class="wizard-step-dot done" role="listitem" aria-label="Step 1 of 4, completed"></div>
+      <div class="wizard-step-dot" id="ws2" role="listitem" aria-label="Step 2 of 4"></div>
+      <div class="wizard-step-dot" id="ws3" role="listitem" aria-label="Step 3 of 4"></div>
+      <div class="wizard-step-dot" id="ws4" role="listitem" aria-label="Step 4 of 4"></div>
     </div>
 
     <!-- Step 1 -->
     <div id="wiz-step-1">
       <p style="font-size:2.5rem; margin-bottom:0.75rem;">🌱</p>
-      <h2 class="wizard-heading" id="wizard-title">Welcome to EcoTrack</h2>
+      <h2 class="wizard-heading">Welcome to EcoTrack</h2>
       <p class="wizard-sub">Your personal carbon footprint tracker. In just 2 minutes we'll calculate your current footprint and build a personalized action plan to reduce it.</p>
       <div class="form-group">
         <label class="form-label" for="wiz-name">Your name</label>
@@ -182,7 +183,7 @@
     <button class="nav-item active" onclick="navigate('dashboard')" id="nav-dashboard" aria-current="page">
       <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
       Dashboard
-      <span class="nav-score-pill" aria-label="Score: 94">94</span>
+      <span class="nav-score-pill" id="nav-score-pill" aria-label="Score: 60">60</span>
     </button>
     <button class="nav-item" onclick="navigate('tracker')" id="nav-tracker">
       <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
@@ -782,27 +783,27 @@
           <div class="panel-header"><h2 class="panel-title">🎖️ Your achievements</h2></div>
           <div class="panel-body">
             <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:0.875rem;" role="list">
-              <div style="text-align:center; padding:1rem; background:var(--green-50); border-radius:var(--radius-md);" role="listitem">
+              <div style="text-align:center; padding:1rem; background:var(--green-50); border-radius:var(--radius-md);" role="listitem" aria-label="Unlocked achievement: First Log">
                 <div style="font-size:2rem;" aria-hidden="true">🌱</div>
                 <div style="font-size:0.72rem; font-weight:600; color:var(--green-800); margin-top:4px;">First Log</div>
               </div>
-              <div style="text-align:center; padding:1rem; background:var(--green-50); border-radius:var(--radius-md);" role="listitem">
+              <div style="text-align:center; padding:1rem; background:var(--green-50); border-radius:var(--radius-md);" role="listitem" aria-label="Unlocked achievement: 14-day streak">
                 <div style="font-size:2rem;" aria-hidden="true">🔥</div>
                 <div style="font-size:0.72rem; font-weight:600; color:var(--green-800); margin-top:4px;">14-day streak</div>
               </div>
-              <div style="text-align:center; padding:1rem; background:var(--green-50); border-radius:var(--radius-md);" role="listitem">
+              <div style="text-align:center; padding:1rem; background:var(--green-50); border-radius:var(--radius-md);" role="listitem" aria-label="Unlocked achievement: Pedal Power">
                 <div style="font-size:2rem;" aria-hidden="true">🚲</div>
                 <div style="font-size:0.72rem; font-weight:600; color:var(--green-800); margin-top:4px;">Pedal Power</div>
               </div>
-              <div style="text-align:center; padding:1rem; background:var(--green-50); border-radius:var(--radius-md);" role="listitem">
+              <div style="text-align:center; padding:1rem; background:var(--green-50); border-radius:var(--radius-md);" role="listitem" aria-label="Unlocked achievement: Green Eater">
                 <div style="font-size:2rem;" aria-hidden="true">🥗</div>
                 <div style="font-size:0.72rem; font-weight:600; color:var(--green-800); margin-top:4px;">Green Eater</div>
               </div>
-              <div style="text-align:center; padding:1rem; background:var(--gray-100); border-radius:var(--radius-md); opacity:0.5;" role="listitem" aria-label="Locked achievement">
+              <div style="text-align:center; padding:1rem; background:var(--gray-100); border-radius:var(--radius-md); opacity:0.5;" role="listitem" aria-label="Locked achievement: EV Driver">
                 <div style="font-size:2rem;" aria-hidden="true">🔒</div>
                 <div style="font-size:0.72rem; font-weight:600; color:var(--gray-500); margin-top:4px;">EV Driver</div>
               </div>
-              <div style="text-align:center; padding:1rem; background:var(--gray-100); border-radius:var(--radius-md); opacity:0.5;" role="listitem" aria-label="Locked achievement">
+              <div style="text-align:center; padding:1rem; background:var(--gray-100); border-radius:var(--radius-md); opacity:0.5;" role="listitem" aria-label="Locked achievement: Net Zero">
                 <div style="font-size:2rem;" aria-hidden="true">🔒</div>
                 <div style="font-size:0.72rem; font-weight:600; color:var(--gray-500); margin-top:4px;">Net Zero</div>
               </div>
@@ -925,8 +926,8 @@
 </div>
 
 <!-- Custom Scripts -->
-<script src="js/api.js"></script>
-<script src="js/app.js"></script>
+<script src="js/api.js" defer></script>
+<script src="js/app.js" defer></script>
 
 <!-- Google Maps Script -->
 <!-- <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&callback=initMap"></script> -->

@@ -3,6 +3,8 @@
  * Uses Node.js built-in test runner (node:test) and native fetch.
  */
 
+'use strict';
+
 const test = require('node:test');
 const assert = require('node:assert');
 const http = require('http');
@@ -87,6 +89,15 @@ test('EcoTrack API Integration Tests', async (t) => {
     assert.strictEqual(data.category, 'transport');
     assert.strictEqual(data.co2, 5.25);
     assert.ok(data.id);
+  });
+
+  await t.test('POST /api/actions/toggle - rejects missing actionId with 400', async () => {
+    const { status, data } = await apiFetch('/api/actions/toggle', {
+      method: 'POST',
+      body: JSON.stringify({}) // missing actionId
+    });
+    assert.strictEqual(status, 400);
+    assert.ok(data.error);
   });
 
   await t.test('POST /api/actions/toggle - toggles action checklist', async () => {

@@ -4,6 +4,8 @@
  * and managing profile settings. Persists data to local database.json.
  */
 
+'use strict';
+
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
@@ -14,14 +16,40 @@ const PORT = process.env.PORT || 3000;
 const DB_PATH = path.join(__dirname, 'data', 'database.json');
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl) or matching localhost/127.0.0.1
+    if (!origin || /^(https?:\/\/)?(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
+
+// Helper function to sanitize user strings to prevent XSS / Injection
+function sanitizeString(str) {
+  if (typeof str !== 'string') return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;');
+}
 
 // Security Headers Middleware
 app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   res.setHeader('Content-Security-Policy', "default-src 'self' https://maps.googleapis.com https://www.gstatic.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://maps.googleapis.com https://maps.gstatic.com; connect-src 'self' http://localhost:3000 http://127.0.0.1:3000 http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*;");
   next();
 });
@@ -72,11 +100,31 @@ app.post('/api/user', (req, res) => {
   const db = readDB();
   const { user, footprint } = req.body;
   
-  if (user) {
-    db.user = { ...db.user, ...user };
+  if (user && typeof user === 'object') {
+    const allowedUserKeys = ['name', 'email', 'city', 'ecoScore', 'streak', 'preferences'];
+    const sanitizedUser = {};
+    allowedUserKeys.forEach(key => {
+      if (user[key] !== undefined) {
+        if (key === 'preferences' && typeof user[key] === 'object') {
+          sanitizedUser[key] = user[key];
+        } else if (key === 'ecoScore' || key === 'streak') {
+          sanitizedUser[key] = parseInt(user[key], 10) || 0;
+        } else {
+          sanitizedUser[key] = sanitizeString(user[key]);
+        }
+      }
+    });
+    db.user = { ...db.user, ...sanitizedUser };
   }
-  if (footprint) {
-    db.footprint = { ...db.footprint, ...footprint };
+  if (footprint && typeof footprint === 'object') {
+    const allowedFootprintKeys = ['transport', 'energy', 'flights', 'food'];
+    const sanitizedFootprint = {};
+    allowedFootprintKeys.forEach(key => {
+      if (footprint[key] !== undefined) {
+        sanitizedFootprint[key] = parseFloat(footprint[key]) || 0;
+      }
+    });
+    db.footprint = { ...db.footprint, ...sanitizedFootprint };
   }
   
   writeDB(db);
@@ -89,13 +137,11 @@ app.post('/api/user/calculate', (req, res) => {
   const { name, city, drive, flights, diet, household } = req.body;
 
   const dietFactors = { veg: 0.9, vegan: 0.6, nonveg: 1.8, 'meat-heavy': 2.8 };
-  const transport = parseFloat(((drive * 52 * 0.21) / 1000).toFixed(2));
-  const aviation = parseFloat((flights * 0.255 * 900 / 1000).toFixed(2));
-  // Get elec from req.body if sent, fallback otherwise
+  const transport = parseFloat(((parseFloat(drive || 0) * 52 * 0.21) / 1000).toFixed(2));
+  const aviation = parseFloat((parseFloat(flights || 0) * 0.255 * 900 / 1000).toFixed(2));
   const elecInput = parseFloat(req.body.elec) || 1200;
   const energyCalculated = parseFloat(((elecInput * 12 * 0.00082) + 0.76).toFixed(2));
-  
-  const food = parseFloat(((dietFactors[diet] || 1.5) * 12 / household).toFixed(2));
+  const food = parseFloat(((dietFactors[diet] || 1.5) * 12 / (parseFloat(household) || 1)).toFixed(2));
   const total = parseFloat((transport + aviation + energyCalculated + food).toFixed(1));
 
   db.footprint = {
@@ -107,8 +153,8 @@ app.post('/api/user/calculate', (req, res) => {
   
   db.user = {
     ...db.user,
-    name: name || db.user.name || 'Priya',
-    city: city || db.user.city || 'delhi',
+    name: sanitizeString(name) || db.user.name || 'Priya',
+    city: sanitizeString(city).toLowerCase() || db.user.city || 'delhi',
     ecoScore: 60
   };
 
@@ -139,9 +185,9 @@ app.post('/api/activities', (req, res) => {
   const newActivity = {
     id: 'act-' + Date.now(),
     date: new Date().toLocaleDateString('en-IN'),
-    name,
-    category,
-    co2,
+    name: sanitizeString(name),
+    category: sanitizeString(category),
+    co2: sanitizeString(String(co2)),
     status: 'Logged'
   };
 
@@ -179,16 +225,18 @@ app.post('/api/actions/toggle', (req, res) => {
     return res.status(400).json({ error: 'Missing action ID' });
   }
 
+  const cleanActionId = sanitizeString(actionId);
+
   if (!db.actionsCompleted) db.actionsCompleted = [];
   
-  const index = db.actionsCompleted.indexOf(actionId);
+  const index = db.actionsCompleted.indexOf(cleanActionId);
   let completed = false;
 
   if (index > -1) {
     db.actionsCompleted.splice(index, 1);
     db.user.ecoScore = Math.max(0, (db.user.ecoScore || 60) - 4);
   } else {
-    db.actionsCompleted.push(actionId);
+    db.actionsCompleted.push(cleanActionId);
     db.user.ecoScore = Math.min(100, (db.user.ecoScore || 60) + 4);
     completed = true;
   }
@@ -231,7 +279,7 @@ app.get('/api/community/leaderboard', (req, res) => {
     ]
   };
 
-  const list = leaderboardData[city.toLowerCase()] || leaderboardData['delhi'];
+  const list = [...(leaderboardData[city.toLowerCase()] || leaderboardData['delhi'])];
   list.sort((a, b) => b.score - a.score);
   res.json(list);
 });

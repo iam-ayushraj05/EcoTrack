@@ -27,13 +27,14 @@ function initStateSearch(inputId, dropdownId, buttonId, onSelectCallback) {
       state.toLowerCase().includes(filterText.toLowerCase())
     );
     
+    const fragment = document.createDocumentFragment();
     if (filtered.length === 0) {
       const emptyItem = document.createElement('div');
       emptyItem.className = 'state-search-item';
       emptyItem.style.color = 'var(--gray-400)';
       emptyItem.style.cursor = 'default';
       emptyItem.textContent = 'No states found';
-      dropdown.appendChild(emptyItem);
+      fragment.appendChild(emptyItem);
     } else {
       filtered.forEach(stateName => {
         const item = document.createElement('div');
@@ -44,9 +45,10 @@ function initStateSearch(inputId, dropdownId, buttonId, onSelectCallback) {
           dropdown.classList.add('hidden');
           if (onSelectCallback) onSelectCallback(stateName);
         });
-        dropdown.appendChild(item);
+        fragment.appendChild(item);
       });
     }
+    dropdown.appendChild(fragment);
   };
 
   input.addEventListener('focus', () => {
@@ -163,13 +165,6 @@ function initDates() {
   }
   const tripDate = document.getElementById('trip-date');
   if (tripDate) tripDate.value = now.toISOString().substring(0, 10);
-}
-
-/* ── Sanitize helper (XSS prevention) ────────────────────────── */
-function sanitize(str) {
-  const div = document.createElement('div');
-  div.appendChild(document.createTextNode(String(str)));
-  return div.innerHTML;
 }
 
 /* ── Navigation ───────────────────────────────────────────────── */
@@ -376,6 +371,14 @@ function updateDashboardUI() {
     const target = circumference * (1 - score / 100);
     arc.style.strokeDashoffset = target;
   }
+
+  // Update nav score pill
+  const score = state.user.ecoScore || 60;
+  const navPill = document.getElementById('nav-score-pill');
+  if (navPill) {
+    navPill.textContent = score;
+    navPill.setAttribute('aria-label', `Score: ${score}`);
+  }
 }
 
 function updateProgressBar(labelId, pct) {
@@ -429,7 +432,10 @@ window.wizNext = async function(current) {
   wizStep = current + 1;
   document.getElementById('wiz-step-' + wizStep).classList.remove('hidden');
   const dot = document.getElementById('ws' + wizStep);
-  if (dot) dot.classList.add('done');
+  if (dot) {
+    dot.classList.add('done');
+    dot.setAttribute('aria-label', `Step ${wizStep} of 4, completed`);
+  }
 };
 
 window.wizBack = function(current) {
@@ -678,6 +684,7 @@ function renderHistory() {
     return;
   }
   
+  const fragment = document.createDocumentFragment();
   activitiesToShow.forEach(a => {
     const tr = document.createElement('tr');
     
@@ -709,8 +716,9 @@ function renderHistory() {
     tr.appendChild(tdCo2);
     tr.appendChild(tdStatus);
     
-    tbody.appendChild(tr);
+    fragment.appendChild(tr);
   });
+  tbody.appendChild(fragment);
 }
 
 /* ── Export Data (CSV) ────────────────────────────────────────── */
@@ -749,6 +757,7 @@ function renderActions() {
   if (!grid) return;
   grid.innerHTML = '';
   
+  const fragment = document.createDocumentFragment();
   ACTIONS.forEach(a => {
     const card = document.createElement('div');
     card.className = `action-card ${state.actionsChecked.has(a.id) ? 'checked' : ''}`;
@@ -800,8 +809,9 @@ function renderActions() {
     card.appendChild(iconWrap);
     card.appendChild(contentWrap);
     card.appendChild(check);
-    grid.appendChild(card);
+    fragment.appendChild(card);
   });
+  grid.appendChild(fragment);
   
   document.getElementById('actions-done-count').textContent = state.actionsChecked.size;
 }
@@ -839,6 +849,7 @@ async function renderLeaderboard() {
   el.innerHTML = '';
   
   let userRank = 3;
+  const fragment = document.createDocumentFragment();
   board.forEach((u, i) => {
     if (u.isUser) {
       userRank = i + 1;
@@ -885,8 +896,9 @@ async function renderLeaderboard() {
     item.appendChild(name);
     item.appendChild(barWrap);
     item.appendChild(score);
-    el.appendChild(item);
+    fragment.appendChild(item);
   });
+  el.appendChild(fragment);
 
   const rankEl = document.getElementById('dash-rank');
   if (rankEl) {
