@@ -1,97 +1,135 @@
-/**
- * api.js - Data Access & API Layer
- * Abstracts backend HTTP requests with a fallback to localStorage if the backend is offline.
- */
-
 'use strict';
 
+/**
+ * api.js - Data Access & API Layer
+ * Abstracts backend HTTP requests with a transparent fallback to
+ * localStorage when the Express backend is offline.
+ *
+ * All public methods are async and always resolve (never reject),
+ * so callers do not need try/catch wrappers.
+ */
+
+/** Base URL for the Express API. */
 const API_BASE_URL = 'http://localhost:3000/api';
 
-const api = {
-  isOffline: true, // Default to offline/local mode
+/** Connection timeout for the health-check probe (ms). */
+const PROBE_TIMEOUT_MS = 1500;
 
-  // Detect server availability
+/** Keys used in localStorage for offline persistence. */
+const LS_KEYS = Object.freeze({
+  USER:       'ecotrack_user',
+  FOOTPRINT:  'ecotrack_footprint',
+  ACTIVITIES: 'ecotrack_activities',
+  ACTIONS:    'ecotrack_actions'
+});
+
+/**
+ * Safely parse a JSON string from localStorage.
+ * Returns `fallback` on any parse error.
+ * @template T
+ * @param {string} key
+ * @param {T} fallback
+ * @returns {T}
+ */
+function lsGet(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Safely serialise and store a value in localStorage.
+ * Silently discards write errors (e.g. private-mode quota).
+ * @param {string} key
+ * @param {unknown} value
+ */
+function lsSet(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Storage unavailable — continue in-memory only
+  }
+}
+
+const api = {
+  /** Whether the Express backend is reachable. */
+  isOffline: true,
+
+  /**
+   * Probe the backend and switch the UI badge accordingly.
+   * Must be called once during app initialisation.
+   */
   async init() {
     try {
-      const response = await fetch(`${API_BASE_URL}/user`, { signal: AbortSignal.timeout(1500) });
-      if (response.ok) {
-        this.isOffline = false;
-        console.log('EcoTrack running in Full-Stack Server Mode');
-      } else {
-        throw new Error('Server returned error status');
-      }
-    } catch (err) {
+      const response = await fetch(`${API_BASE_URL}/user`, {
+        signal: AbortSignal.timeout(PROBE_TIMEOUT_MS)
+      });
+      this.isOffline = !response.ok;
+    } catch {
       this.isOffline = true;
-      console.warn('EcoTrack running in Local Storage Fallback Mode:', err.message);
     }
-    this.updateModeUI();
+    this._updateModeUI();
   },
 
-  updateModeUI() {
+  /** @private */
+  _updateModeUI() {
     const header = document.querySelector('.header-tagline');
-    if (header) {
-      // Remove any existing badge
-      const existing = document.getElementById('mode-badge');
-      if (existing) existing.remove();
+    if (!header) return;
 
-      const badge = document.createElement('span');
-      badge.id = 'mode-badge';
-      if (this.isOffline) {
-        badge.className = 'mode-badge local';
-        badge.textContent = 'Local Storage';
-        badge.title = 'Express server is offline. Data is stored in your browser.';
-      } else {
-        badge.className = 'mode-badge server';
-        badge.textContent = 'Connected';
-        badge.title = 'Connected to local Node.js Express server.';
-      }
-      header.after(badge);
+    const existing = document.getElementById('mode-badge');
+    if (existing) existing.remove();
+
+    const badge = document.createElement('span');
+    badge.id = 'mode-badge';
+    if (this.isOffline) {
+      badge.className = 'mode-badge local';
+      badge.textContent = 'Local Storage';
+      badge.title = 'Express server is offline. Data is stored in your browser.';
+    } else {
+      badge.className = 'mode-badge server';
+      badge.textContent = 'Connected';
+      badge.title = 'Connected to local Node.js Express server.';
     }
+    header.after(badge);
   },
 
-  // GET User Data (includes profile, footprint, streak, ecoScore, preferences)
+  /**
+   * Fetch the current user profile and footprint data.
+   * @returns {Promise<{user: object, footprint: object}>}
+   */
   async getUserData() {
     if (!this.isOffline) {
       try {
         const res = await fetch(`${API_BASE_URL}/user`);
-        if (res.ok) return await res.json();
-      } catch (e) {
-        console.error('API Error: getUserData', e);
-      }
+        if (res.ok) return res.json();
+      } catch { /* fall through to local */ }
     }
 
-    // Local Storage Fallback
-    let localUser = localStorage.getItem('ecotrack_user');
-    let localFootprint = localStorage.getItem('ecotrack_footprint');
-    
-    if (!localUser) {
-      // Default initial state matching original app
+    const user = lsGet(LS_KEYS.USER, null);
+    if (!user) {
       const defaultUser = {
-        name: 'Priya',
-        email: 'priya@example.com',
-        city: 'delhi',
-        streak: 14,
-        ecoScore: 72,
-        preferences: {
-          dailyReminders: true,
-          weeklySummary: true,
-          aiTips: true,
-          units: 'Metric (kg, km)'
-        }
+        name: 'Priya', email: 'priya@example.com', city: 'delhi',
+        streak: 14, ecoScore: 72,
+        preferences: { dailyReminders: true, weeklySummary: true, aiTips: true, units: 'Metric (kg, km)' }
       };
       const defaultFootprint = { transport: 2.1, energy: 1.8, flights: 1.6, food: 0.9 };
-      localStorage.setItem('ecotrack_user', JSON.stringify(defaultUser));
-      localStorage.setItem('ecotrack_footprint', JSON.stringify(defaultFootprint));
+      lsSet(LS_KEYS.USER, defaultUser);
+      lsSet(LS_KEYS.FOOTPRINT, defaultFootprint);
       return { user: defaultUser, footprint: defaultFootprint };
     }
 
-    return {
-      user: JSON.parse(localUser),
-      footprint: JSON.parse(localFootprint)
-    };
+    return { user, footprint: lsGet(LS_KEYS.FOOTPRINT, { transport: 2.1, energy: 1.8, flights: 1.6, food: 0.9 }) };
   },
 
-  // POST Update User Data
+  /**
+   * Persist user profile and/or footprint changes.
+   * @param {object|null} userData
+   * @param {object|null} footprintData
+   * @returns {Promise<{success: boolean}>}
+   */
   async saveUserData(userData, footprintData) {
     if (!this.isOffline) {
       try {
@@ -100,24 +138,23 @@ const api = {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ user: userData, footprint: footprintData })
         });
-        if (res.ok) return await res.json();
-      } catch (e) {
-        console.error('API Error: saveUserData', e);
-      }
+        if (res.ok) return res.json();
+      } catch { /* fall through to local */ }
     }
 
-    // Local Storage Fallback
     if (userData) {
-      const current = JSON.parse(localStorage.getItem('ecotrack_user') || '{}');
-      localStorage.setItem('ecotrack_user', JSON.stringify({ ...current, ...userData }));
+      const current = lsGet(LS_KEYS.USER, {});
+      lsSet(LS_KEYS.USER, { ...current, ...userData });
     }
-    if (footprintData) {
-      localStorage.setItem('ecotrack_footprint', JSON.stringify(footprintData));
-    }
+    if (footprintData) lsSet(LS_KEYS.FOOTPRINT, footprintData);
     return { success: true };
   },
 
-  // POST Calculate footprint from onboarding wizard
+  /**
+   * Run the onboarding calculation (wizard step 3).
+   * @param {object} wizardAnswers
+   * @returns {Promise<{total: number, footprint: object, user: object}>}
+   */
   async calculateInitialFootprint(wizardAnswers) {
     if (!this.isOffline) {
       try {
@@ -126,52 +163,51 @@ const api = {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(wizardAnswers)
         });
-        if (res.ok) return await res.json();
-      } catch (e) {
-        console.error('API Error: calculateInitialFootprint', e);
-      }
+        if (res.ok) return res.json();
+      } catch { /* fall through to local */ }
     }
 
-    // Local Logic Fallback
-    const drive = parseFloat(wizardAnswers.drive) || 0;
-    const flights = parseFloat(wizardAnswers.flights) || 0;
-    const elec = parseFloat(wizardAnswers.elec) || 0;
-    const diet = wizardAnswers.diet || 'veg';
+    // Local computation fallback
+    const drive     = parseFloat(wizardAnswers.drive)     || 0;
+    const flights   = parseFloat(wizardAnswers.flights)   || 0;
+    const elec      = parseFloat(wizardAnswers.elec)      || 0;
     const household = parseFloat(wizardAnswers.household) || 1;
-
+    const diet      = wizardAnswers.diet || 'veg';
     const dietFactors = { veg: 0.9, vegan: 0.6, nonveg: 1.8, 'meat-heavy': 2.8 };
+
     const transport = parseFloat(((drive * 52 * 0.21) / 1000).toFixed(2));
-    const aviation = parseFloat((flights * 0.255 * 900 / 1000).toFixed(2));
-    const energy = parseFloat(((elec * 12 * 0.00082) + 0.76).toFixed(2));
-    const food = parseFloat(((dietFactors[diet] || 1.5) * 12 / household).toFixed(2));
-    const total = parseFloat((transport + aviation + energy + food).toFixed(1));
-
+    const aviation  = parseFloat((flights * 0.255 * 900 / 1000).toFixed(2));
+    const energy    = parseFloat(((elec * 12 * 0.00082) + 0.76).toFixed(2));
+    const food      = parseFloat(((dietFactors[diet] || 1.5) * 12 / household).toFixed(2));
+    const total     = parseFloat((transport + aviation + energy + food).toFixed(1));
     const footprint = { transport, flights: aviation, energy, food };
-    const currentUser = JSON.parse(localStorage.getItem('ecotrack_user') || '{}');
+
+    const currentUser = lsGet(LS_KEYS.USER, {});
     const user = { ...currentUser, name: wizardAnswers.name, city: wizardAnswers.city, ecoScore: 60 };
-
-    localStorage.setItem('ecotrack_user', JSON.stringify(user));
-    localStorage.setItem('ecotrack_footprint', JSON.stringify(footprint));
-
+    lsSet(LS_KEYS.USER, user);
+    lsSet(LS_KEYS.FOOTPRINT, footprint);
     return { total, footprint, user };
   },
 
-  // GET Logged Activities
+  /**
+   * Retrieve the full activity log.
+   * @returns {Promise<Array>}
+   */
   async getActivities() {
     if (!this.isOffline) {
       try {
         const res = await fetch(`${API_BASE_URL}/activities`);
-        if (res.ok) return await res.json();
-      } catch (e) {
-        console.error('API Error: getActivities', e);
-      }
+        if (res.ok) return res.json();
+      } catch { /* fall through to local */ }
     }
-
-    // Local Storage Fallback
-    return JSON.parse(localStorage.getItem('ecotrack_activities') || '[]');
+    return lsGet(LS_KEYS.ACTIVITIES, []);
   },
 
-  // POST Log new activity
+  /**
+   * Append a new activity entry.
+   * @param {object} activity
+   * @returns {Promise<object>}
+   */
   async logActivity(activity) {
     if (!this.isOffline) {
       try {
@@ -180,56 +216,51 @@ const api = {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(activity)
         });
-        if (res.ok) return await res.json();
-      } catch (e) {
-        console.error('API Error: logActivity', e);
-      }
+        if (res.ok) return res.json();
+      } catch { /* fall through to local */ }
     }
 
-    // Local Storage Fallback
-    const list = JSON.parse(localStorage.getItem('ecotrack_activities') || '[]');
-    const newEntry = {
-      id: 'local-' + Date.now(),
-      date: new Date().toLocaleDateString('en-IN'),
-      ...activity
-    };
+    const list = lsGet(LS_KEYS.ACTIVITIES, []);
+    const newEntry = { id: 'local-' + Date.now(), date: new Date().toLocaleDateString('en-IN'), ...activity };
     list.unshift(newEntry);
-    localStorage.setItem('ecotrack_activities', JSON.stringify(list));
+    lsSet(LS_KEYS.ACTIVITIES, list);
     return newEntry;
   },
 
-  // DELETE Reset all activities
+  /**
+   * Clear all activities, actions, and reset the footprint baseline.
+   * @returns {Promise<boolean>}
+   */
   async resetActivities() {
     if (!this.isOffline) {
       try {
         const res = await fetch(`${API_BASE_URL}/activities`, { method: 'DELETE' });
         if (res.ok) return true;
-      } catch (e) {
-        console.error('API Error: resetActivities', e);
-      }
+      } catch { /* fall through to local */ }
     }
-
-    // Local Storage Fallback
-    localStorage.removeItem('ecotrack_activities');
+    localStorage.removeItem(LS_KEYS.ACTIVITIES);
     return true;
   },
 
-  // GET Completed Action IDs
+  /**
+   * Retrieve the list of completed action IDs.
+   * @returns {Promise<string[]>}
+   */
   async getActions() {
     if (!this.isOffline) {
       try {
         const res = await fetch(`${API_BASE_URL}/actions`);
-        if (res.ok) return await res.json();
-      } catch (e) {
-        console.error('API Error: getActions', e);
-      }
+        if (res.ok) return res.json();
+      } catch { /* fall through to local */ }
     }
-
-    // Local Storage Fallback
-    return JSON.parse(localStorage.getItem('ecotrack_actions') || '[]');
+    return lsGet(LS_KEYS.ACTIONS, []);
   },
 
-  // POST Toggle Action Completion
+  /**
+   * Toggle an action's completed state.
+   * @param {string} actionId
+   * @returns {Promise<{completed: boolean, list: string[]}>}
+   */
   async toggleAction(actionId) {
     if (!this.isOffline) {
       try {
@@ -238,50 +269,54 @@ const api = {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ actionId })
         });
-        if (res.ok) return await res.json();
-      } catch (e) {
-        console.error('API Error: toggleAction', e);
-      }
+        if (res.ok) return res.json();
+      } catch { /* fall through to local */ }
     }
 
-    // Local Storage Fallback
-    let list = JSON.parse(localStorage.getItem('ecotrack_actions') || '[]');
-    const index = list.indexOf(actionId);
-    let completed = false;
-
+    const list     = lsGet(LS_KEYS.ACTIONS, []);
+    const index    = list.indexOf(actionId);
+    let completed  = false;
     if (index > -1) {
       list.splice(index, 1);
     } else {
       list.push(actionId);
       completed = true;
     }
-    
-    localStorage.setItem('ecotrack_actions', JSON.stringify(list));
+    lsSet(LS_KEYS.ACTIONS, list);
     return { completed, list };
   },
 
-  // GET City Leaderboard
+  /**
+   * Fetch city leaderboard, with in-memory cache to avoid repeated requests.
+   * @param {string} [city='delhi']
+   * @returns {Promise<Array>}
+   */
   async getLeaderboard(city = 'delhi') {
+    const cacheKey = `lb_${city}`;
+    if (this._lbCache && this._lbCache[cacheKey]) return this._lbCache[cacheKey];
+
     if (!this.isOffline) {
       try {
-        const res = await fetch(`${API_BASE_URL}/community/leaderboard?city=${city}`);
-        if (res.ok) return await res.json();
-      } catch (e) {
-        console.error('API Error: getLeaderboard', e);
-      }
+        const res = await fetch(`${API_BASE_URL}/community/leaderboard?city=${encodeURIComponent(city)}`);
+        if (res.ok) {
+          const data = await res.json();
+          this._lbCache = this._lbCache || {};
+          this._lbCache[cacheKey] = data;
+          return data;
+        }
+      } catch { /* fall through to local */ }
     }
 
-    // Local Fallback Data
-    const localUser = JSON.parse(localStorage.getItem('ecotrack_user') || '{}');
-    const userName = localUser.name || 'Priya S.';
-    const userScore = localUser.ecoScore !== undefined ? localUser.ecoScore : 72;
+    const localUser  = lsGet(LS_KEYS.USER, {});
+    const userName   = localUser.name  || 'Priya S.';
+    const userScore  = localUser.ecoScore !== undefined ? localUser.ecoScore : 72;
     const userAvatar = userName.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
 
     const list = [
-      { name: 'Rahul M.', score: 78, avatar: 'RM', color: '#dcfce7', text: '#166534' },
-      { name: 'Sneha P.', score: 74, avatar: 'SP', color: '#dbeafe', text: '#1e40af' },
-      { name: userName, score: userScore, avatar: userAvatar, color: '#fef3c7', text: '#92400e', isUser: true },
-      { name: 'Arun K.', score: 65, avatar: 'AK', color: '#f3e8ff', text: '#6b21a8' },
+      { name: 'Rahul M.',  score: 78, avatar: 'RM', color: '#dcfce7', text: '#166534' },
+      { name: 'Sneha P.',  score: 74, avatar: 'SP', color: '#dbeafe', text: '#1e40af' },
+      { name: userName,   score: userScore, avatar: userAvatar, color: '#fef3c7', text: '#92400e', isUser: true },
+      { name: 'Arun K.',  score: 65, avatar: 'AK', color: '#f3e8ff', text: '#6b21a8' },
       { name: 'Divya R.', score: 61, avatar: 'DR', color: '#fce7f3', text: '#9d174d' },
       { name: 'Vikram S.', score: 55, avatar: 'VS', color: '#dcfce7', text: '#166534' }
     ];

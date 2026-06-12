@@ -224,6 +224,27 @@ test('EcoTrack API Integration Tests', async (t) => {
     assert.ok(!data.name.includes('<script>'), 'XSS should be sanitized');
   });
 
+  // ── 16. Malformed JSON body ────────────────────────────────────
+  await t.test('POST /api/activities - rejects malformed JSON with 400', async () => {
+    const res = await fetch(`http://localhost:${port}/api/activities`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{invalid json...'  // deliberately broken JSON
+    });
+    assert.equal(res.status, 400);
+    const data = await res.json();
+    assert.ok(data.error, 'Should return an error field');
+  });
+
+  // ── 17. Security headers present ──────────────────────────────
+  await t.test('GET /api/user - response includes security headers', async () => {
+    const res = await fetch(`http://localhost:${port}/api/user`);
+    assert.equal(res.status, 200);
+    assert.ok(res.headers.get('x-content-type-options'), 'X-Content-Type-Options header should be set');
+    assert.ok(res.headers.get('x-frame-options'), 'X-Frame-Options header should be set');
+    assert.ok(res.headers.get('referrer-policy'), 'Referrer-Policy header should be set');
+  });
+
   // ── Teardown ────────────────────────────────────────────────────
   await new Promise((resolve) => server.close(resolve));
 });
