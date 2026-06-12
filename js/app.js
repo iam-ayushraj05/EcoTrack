@@ -5,6 +5,16 @@
 
 'use strict';
 
+/* ── Constants ───────────────────────────────────────────────── */
+/** Debounce delay (ms) for search input to avoid excess DOM churn. */
+const SEARCH_DEBOUNCE_MS = 120;
+/** Maximum activities shown in the history table. */
+const HISTORY_DISPLAY_LIMIT = 20;
+/** CO₂ score points awarded per completed action. */
+const ACTION_SCORE_DELTA = 4;
+/** Default EcoScore assigned after onboarding. */
+const DEFAULT_ECO_SCORE = 60;
+
 /* ── Indian States List & Search Auto-complete ─────────────────── */
 const INDIAN_STATES = [
   "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", "Haryana",
@@ -14,19 +24,38 @@ const INDIAN_STATES = [
   "Dadra and Nagar Haveli and Daman and Diu", "Delhi", "Jammu and Kashmir", "Ladakh", "Lakshadweep", "Puducherry"
 ];
 
+/**
+ * Debounce helper — delays fn execution until after `delay` ms of inactivity.
+ * @param {Function} fn
+ * @param {number} delay
+ * @returns {Function}
+ */
+function debounce(fn, delay) {
+  let timer;
+  return function(...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
+
+/**
+ * Initialises a searchable Indian-state dropdown.
+ * Uses debounced input handling to reduce unnecessary DOM updates.
+ * @param {string} inputId
+ * @param {string} dropdownId
+ * @param {string} buttonId
+ * @param {Function} [onSelectCallback]
+ */
 function initStateSearch(inputId, dropdownId, buttonId, onSelectCallback) {
-  const input = document.getElementById(inputId);
+  const input    = document.getElementById(inputId);
   const dropdown = document.getElementById(dropdownId);
-  const button = document.getElementById(buttonId);
-  
+  const button   = document.getElementById(buttonId);
   if (!input || !dropdown || !button) return;
-  
+
   const renderList = (filterText = '') => {
-    dropdown.innerHTML = '';
-    const filtered = INDIAN_STATES.filter(state => 
-      state.toLowerCase().includes(filterText.toLowerCase())
-    );
-    
+    while (dropdown.firstChild) dropdown.removeChild(dropdown.firstChild);
+    const q = filterText.toLowerCase();
+    const filtered = INDIAN_STATES.filter(s => s.toLowerCase().includes(q));
     const fragment = document.createDocumentFragment();
     if (filtered.length === 0) {
       const emptyItem = document.createElement('div');
@@ -51,20 +80,13 @@ function initStateSearch(inputId, dropdownId, buttonId, onSelectCallback) {
     dropdown.appendChild(fragment);
   };
 
-  input.addEventListener('focus', () => {
-    renderList(input.value);
-    dropdown.classList.remove('hidden');
-  });
+  const debouncedRender = debounce(renderList, SEARCH_DEBOUNCE_MS);
 
-  input.addEventListener('input', () => {
-    renderList(input.value);
-    dropdown.classList.remove('hidden');
-  });
-
+  input.addEventListener('focus', () => { renderList(input.value); dropdown.classList.remove('hidden'); });
+  input.addEventListener('input', () => { debouncedRender(input.value); dropdown.classList.remove('hidden'); });
   button.addEventListener('click', (e) => {
     e.stopPropagation();
-    const isHidden = dropdown.classList.contains('hidden');
-    if (isHidden) {
+    if (dropdown.classList.contains('hidden')) {
       renderList(input.value);
       dropdown.classList.remove('hidden');
       input.focus();
@@ -72,7 +94,6 @@ function initStateSearch(inputId, dropdownId, buttonId, onSelectCallback) {
       dropdown.classList.add('hidden');
     }
   });
-
   document.addEventListener('click', (e) => {
     if (!input.contains(e.target) && !dropdown.contains(e.target) && !button.contains(e.target)) {
       dropdown.classList.add('hidden');
@@ -120,23 +141,49 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 5. Initialize dates
   initDates();
 
-  // 6. Graceful Google Maps Fallback Timeout
+  // 6. Graceful Google Maps Fallback — build DOM safely, no innerHTML with strings
   setTimeout(() => {
     const el = document.getElementById('emission-map');
-    if (el && (el.innerHTML.includes('Loading Google Maps') || el.textContent.includes('Loading Google Maps'))) {
-      el.innerHTML = `
-        <div style="text-align:center; padding:1.5rem;">
-          <div style="font-size:2.5rem; margin-bottom:0.5rem;">🌍</div>
-          <p style="font-size:0.95rem; font-weight:700; color:var(--green-700); margin-bottom:0.25rem;">Interactive Emission Map</p>
-          <p style="font-size:0.78rem; color:var(--gray-500); max-width:320px; margin:0 auto 1.25rem;">Hotspot visualization based on user density and local emission databases.</p>
-          <div style="display:flex; justify-content:center; gap:0.5rem; flex-wrap:wrap; max-width:340px; margin:0 auto;">
-            <span style="background:var(--green-50); border:1px solid var(--green-200); padding:4px 10px; border-radius:9999px; font-size:0.72rem; font-weight:600; color:var(--green-800);">Delhi: Hotspot (2.1t)</span>
-            <span style="background:var(--green-50); border:1px solid var(--green-200); padding:4px 10px; border-radius:9999px; font-size:0.72rem; font-weight:600; color:var(--green-800);">Mumbai: Moderate (1.8t)</span>
-            <span style="background:var(--green-50); border:1px solid var(--green-200); padding:4px 10px; border-radius:9999px; font-size:0.72rem; font-weight:600; color:var(--green-800);">Bengaluru: High (2.3t)</span>
-          </div>
-        </div>
-      `;
-    }
+    if (!el || !el.textContent.includes('Loading Google Maps')) return;
+    while (el.firstChild) el.removeChild(el.firstChild);
+
+    const hotspots = [
+      { city: 'Delhi', label: 'Hotspot', val: '2.1t' },
+      { city: 'Mumbai', label: 'Moderate', val: '1.8t' },
+      { city: 'Bengaluru', label: 'High', val: '2.3t' }
+    ];
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'text-align:center;padding:1.5rem';
+
+    const icon = document.createElement('div');
+    icon.setAttribute('aria-hidden', 'true');
+    icon.style.cssText = 'font-size:2.5rem;margin-bottom:0.5rem';
+    icon.textContent = '\uD83C\uDF0D'; // 🌍
+
+    const title = document.createElement('p');
+    title.style.cssText = 'font-size:0.95rem;font-weight:700;color:var(--green-700);margin-bottom:0.25rem';
+    title.textContent = 'Interactive Emission Map';
+
+    const sub = document.createElement('p');
+    sub.style.cssText = 'font-size:0.78rem;color:var(--gray-500);max-width:320px;margin:0 auto 1.25rem';
+    sub.textContent = 'Hotspot visualization based on user density and local emission databases.';
+
+    const pills = document.createElement('div');
+    pills.style.cssText = 'display:flex;justify-content:center;gap:0.5rem;flex-wrap:wrap;max-width:340px;margin:0 auto';
+
+    hotspots.forEach(({ city, label, val }) => {
+      const pill = document.createElement('span');
+      pill.style.cssText = 'background:var(--green-50);border:1px solid var(--green-200);padding:4px 10px;border-radius:9999px;font-size:0.72rem;font-weight:600;color:var(--green-800)';
+      pill.textContent = `${city}: ${label} (${val})`;
+      pills.appendChild(pill);
+    });
+
+    wrap.appendChild(icon);
+    wrap.appendChild(title);
+    wrap.appendChild(sub);
+    wrap.appendChild(pills);
+    el.appendChild(wrap);
   }, 3000);
 
   // 7. Initialize Indian State Search Auto-complete
@@ -144,14 +191,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   initStateSearch('set-state-search', 'set-state-dropdown', 'set-state-search-btn');
 });
 
+/**
+ * Load all user state in parallel using Promise.all for maximum efficiency.
+ * Sequential awaits are avoided to prevent waterfall latency.
+ */
 async function loadStateData() {
-  const data = await api.getUserData();
-  state.user = data.user;
-  state.footprint = data.footprint;
-  
-  state.activities = await api.getActivities();
-  
-  const actionList = await api.getActions();
+  const [userData, activities, actionList] = await Promise.all([
+    api.getUserData(),
+    api.getActivities(),
+    api.getActions()
+  ]);
+  state.user = userData.user;
+  state.footprint = userData.footprint;
+  state.activities = activities;
   state.actionsChecked = new Set(actionList);
 }
 
@@ -676,7 +728,7 @@ function renderHistory() {
     Shopping: 'badge-red' 
   };
   
-  const activitiesToShow = state.activities.slice(0, 20);
+  const activitiesToShow = state.activities.slice(0, HISTORY_DISPLAY_LIMIT);
   if (activitiesToShow.length === 0) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
@@ -812,7 +864,17 @@ function renderActions() {
     check.className = 'action-check';
     check.setAttribute('aria-hidden', 'true');
     if (state.actionsChecked.has(a.id)) {
-      check.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
+      // Build SVG safely via DOM API — never set SVG via innerHTML
+      const svgNS = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(svgNS, 'svg');
+      svg.setAttribute('width', '12'); svg.setAttribute('height', '12');
+      svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('fill', 'none');
+      svg.setAttribute('stroke', 'currentColor'); svg.setAttribute('stroke-width', '3');
+      svg.setAttribute('aria-hidden', 'true');
+      const poly = document.createElementNS(svgNS, 'polyline');
+      poly.setAttribute('points', '20 6 9 17 4 12');
+      svg.appendChild(poly);
+      check.appendChild(svg);
     }
     
     card.appendChild(iconWrap);
@@ -833,13 +895,13 @@ window.toggleAction = async function(id, el) {
     el.classList.add('checked');
     el.setAttribute('aria-pressed', 'true');
     // Earn 10 points on completion
-    state.user.ecoScore = Math.min(100, (state.user.ecoScore || 60) + 4);
+    state.user.ecoScore = Math.min(100, (state.user.ecoScore || DEFAULT_ECO_SCORE) + ACTION_SCORE_DELTA);
     showToast('Action completed! +4 EcoScore 🎉', 'success');
   } else {
     state.actionsChecked.delete(id);
     el.classList.remove('checked');
     el.setAttribute('aria-pressed', 'false');
-    state.user.ecoScore = Math.max(0, (state.user.ecoScore || 60) - 4);
+    state.user.ecoScore = Math.max(0, (state.user.ecoScore || DEFAULT_ECO_SCORE) - ACTION_SCORE_DELTA);
   }
   
   // Save EcoScore changes
